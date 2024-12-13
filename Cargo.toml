@@ -5,3 +5,9 @@ edition = "2021"
 
 [dependencies]
 rusqlite = "0.32.1"
+
+[dependencies.uuid]
+version = "1.11.0"
+features = [
+	"v4",
+]
