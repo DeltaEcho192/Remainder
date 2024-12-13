@@ -1,5 +1,4 @@
 use rusqlite::{Connection, Result};
-use std::error::Error;
 
 struct Spool {
     roll_id: Option<i32>,
@@ -12,11 +11,11 @@ struct Spool {
 struct Filament {}
 
 fn main() {
-    const conversion_factor: f32 = 3.0303;
+    const CONVERSION_FACTOR: f32 = 3.0303;
     let db_path = "./3d_print.db";
     let db = Connection::open(db_path).unwrap();
     println!("Connection to database has been established");
-    create_new_spool_tbl(&db);
+    create_new_spool_tbl(&db).unwrap();
 
     //println!("Remainder 3D Printing");
     //println!("Create New Real");
@@ -66,7 +65,38 @@ fn create_new_spool_tbl(conn: &Connection) -> Result<(), &'static str> {
     Ok(())
 }
 
-fn create_new_filament_tbl() {}
+fn create_new_filament_tbl(conn: &Connection) -> Result<(), &'static str> {
+    let check_query = "SELECT count(name) FROM sqlite_master WHERE type='table' AND name='filament'";
+    let exists_rt = conn.query_row(check_query, [], |row| row.get(0));
+    let exists = match exists_rt {
+        Ok(exists) => exists,
+        Err(e) => {
+            eprintln!("Err: {}", e);
+            return Err("Err with query");
+        }
+    };
+    match exists {
+        0 => {
+            println!("No filament table found, need to create one");
+            let create_query = "CREATE TABLE filament(
+                print_id INTEGER PRIMARY KEY,
+                print_weight REAL,
+                print_length REAL,
+                print_time INT,
+                roll_id INTEGER NOT NULL)";
+            conn.execute(create_query, ()).unwrap();
+            println!("Created filament Table");
+        }
+        1 => {
+            println!("Filament table found")
+        }
+        _ => {
+            println!("Issue with finding table");
+            return Err("Invalid Amount of tables")
+        }
+    }
+    Ok(())
+}
 
 fn open_new_real(spool_info: Spool) {}
 
@@ -80,5 +110,12 @@ mod tests {
         let conn = Connection::open_in_memory().unwrap();
         create_new_spool_tbl(&conn).unwrap();
         create_new_spool_tbl(&conn).unwrap();
+    }
+
+    #[test]
+    fn Test_filament_Creation() {
+        let conn = Connection::open_in_memory().unwrap();
+        create_new_filament_tbl(&conn).unwrap();
+        create_new_filament_tbl(&conn).unwrap();
     }
 }
