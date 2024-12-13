@@ -1,4 +1,5 @@
 use rusqlite::{Connection, Result};
+use std::error::Error;
 
 struct Spool {
     roll_id: Option<i32>,
@@ -32,14 +33,14 @@ fn check_remaining() -> u32 {
 
 fn add_new_print(print_weight: Option<f32>, print_length: Option<f32>) {}
 
-fn create_new_spool_tbl(conn: &Connection) {
+fn create_new_spool_tbl(conn: &Connection) -> Result<(), &'static str> {
     let check_query = "SELECT count(name) FROM sqlite_master WHERE type='table' AND name='spool'";
     let exists_rt = conn.query_row(check_query, [], |row| row.get(0));
     let exists = match exists_rt {
         Ok(exists) => exists,
         Err(e) => {
             eprintln!("Err: {}", e);
-            return;
+            return Err("Err with query");
         }
     };
     match exists {
@@ -58,11 +59,26 @@ fn create_new_spool_tbl(conn: &Connection) {
             println!("Spool table found")
         }
         _ => {
-            println!("Issue with finding table")
+            println!("Issue with finding table");
+            return Err("Invalid Amount of tables")
         }
     }
+    Ok(())
 }
 
 fn create_new_filament_tbl() {}
 
 fn open_new_real(spool_info: Spool) {}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn Test_Spool_Creation() {
+        let conn = Connection::open_in_memory().unwrap();
+        create_new_spool_tbl(&conn).unwrap();
+        create_new_spool_tbl(&conn).unwrap();
+    }
+}
