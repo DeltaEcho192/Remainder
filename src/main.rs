@@ -1,9 +1,9 @@
-use rusqlite::{config::DbConfig, Connection, Result};
+use rusqlite::{Connection, Result};
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 use clap::{Parser, Subcommand};
 
-/// Simple program to greet a person
+/// CLI to keep track and know levels of a 3D printers filament levels
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
@@ -115,6 +115,9 @@ fn main() {
     let db_path = "./3d_print.db";
     let db = Connection::open(db_path).unwrap();
     println!("Connection to database has been established");
+    //Create test spool
+    create_new_spool_tbl(&db).unwrap();
+    create_new_filament_tbl(&db).unwrap();
     let args = Args::parse();
   
     match args.cmd {
@@ -142,12 +145,18 @@ fn main() {
                 roll_length: args.length,
                 timestamp: Some(get_timestamp()),
             };
-            let rt = open_new_spool(&db, &mut new_spool).unwrap();
-            assert_eq!(rt, 1);
+            let spool_rt = open_new_spool(&db, &mut new_spool).unwrap();
+            if spool_rt != 1 {
+                panic!("Didnt Successfully Create Spool");
+            }
 
         },
-        Commands::CheckRemaing => println!("Checking Remaining"),
-        _ => panic!("Something went wrong selecting commands"),
+        Commands::CheckRemaing => {
+            println!("Checking Remaining levels of Printer");
+            let (weight, length) = check_remaining(&db);
+            println!("Estimated REMAINING Weight: {} gram", weight);
+            println!("Estimated REMAINING Lenght: {} meters", length);
+        },
     }
 
     let rt = db.close();
