@@ -4,7 +4,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 
 struct Spool {
-    roll_id: Option<i32>,
+    roll_id: Option<Uuid>,
     roll_name: Option<String>,
     roll_weight: Option<i32>,
     roll_length: Option<i32>,
@@ -24,6 +24,19 @@ impl Spool {
                 let weight = length * CONVERSION_FACTOR;
                 self.roll_weight = Some(weight as i32);
                 weight as i32
+            }
+        }
+    }
+
+    fn get_length(&mut self) -> i32 {
+        const CONVERSION_FACTOR: f32 = 0.33;
+        match self.roll_length { 
+            Some(val) => val,
+            None => {
+                let weight = self.roll_weight.unwrap() as f32;
+                let length = weight * CONVERSION_FACTOR;
+                self.roll_length = Some(length as i32);
+                length as i32
             }
         }
     }
@@ -127,20 +140,24 @@ pub fn get_timestamp() -> i64 {
     timestamp_current
 } 
 
-fn open_new_real(conn: &Connection, mut spool_info: Spool) {
-    let roll_id = Uuid::new_v4();
-    conn.execute(
+fn open_new_spool(conn: &Connection, spool_info: &mut Spool) -> Result<usize> {
+    let rt = conn.execute(
     "INSERT INTO spool (roll_id,
                         roll_name,
                         roll_weight,
                         roll_length,
                         roll_timestamp)
             VALUES (?1,?2,?3,?4,?5)", 
-        (&roll_id.as_bytes(),
-        spool_info.get_weight(),
+        (
+            &spool_info.roll_id.unwrap().as_bytes(),
+            spool_info.roll_name.clone(),
+            spool_info.get_weight(),
+            spool_info.get_length(),
+            spool_info.timestamp,
     )
-    ).unwrap();
-
+    );
+    println!("New spool created");
+    return rt;
 }
 
 
@@ -149,23 +166,23 @@ mod tests {
     use super::*;
 
     #[test]
-    fn Test_Spool_Creation() {
+    fn test_spool_tbl_creation() {
         let conn = Connection::open_in_memory().unwrap();
         create_new_spool_tbl(&conn).unwrap();
         create_new_spool_tbl(&conn).unwrap();
     }
 
     #[test]
-    fn Test_filament_Creation() {
+    fn test_filament_tbl_creation() {
         let conn = Connection::open_in_memory().unwrap();
         create_new_filament_tbl(&conn).unwrap();
         create_new_filament_tbl(&conn).unwrap();
     }
 
     #[test]
-    fn Test_spool_weight_1() {
+    fn test_spool_weight_1() {
         let mut test_spool = Spool {
-            roll_id: Some(1),
+            roll_id: Some(Uuid::new_v4()),
             roll_name: Some(String::from("crealtivity")),
             roll_weight: Some(1000),
             roll_length: None,
@@ -177,9 +194,9 @@ mod tests {
     }
 
     #[test]
-    fn Test_spool_weight_2() {
+    fn test_spool_weight_2() {
         let mut test_spool = Spool {
-            roll_id: Some(1),
+            roll_id: Some(Uuid::new_v4()),
             roll_name: Some(String::from("crealtivity")),
             roll_weight: None,
             roll_length: Some(330),
@@ -189,4 +206,91 @@ mod tests {
         let ans = test_spool.get_weight();
         assert_eq!(ans, 999);
     }
+
+    #[test]
+    #[should_panic]
+    fn test_spool_weight_none() {
+        let mut test_spool = Spool {
+            roll_id: Some(Uuid::new_v4()),
+            roll_name: Some(String::from("crealtivity")),
+            roll_weight: None,
+            roll_length: None,
+            timestamp: Some(get_timestamp())
+        };
+
+        let _ans = test_spool.get_weight();
+    }
+
+    #[test]
+    fn test_spool_length_1() {
+        let mut test_spool = Spool {
+            roll_id: Some(Uuid::new_v4()),
+            roll_name: Some(String::from("crealtivity")),
+            roll_weight: Some(1000),
+            roll_length: None,
+            timestamp: Some(get_timestamp())
+        };
+
+        let ans = test_spool.get_length();
+        assert_eq!(ans, 330);
+    }
+
+    #[test]
+    fn test_spool_length_2() {
+        let mut test_spool = Spool {
+            roll_id: Some(Uuid::new_v4()),
+            roll_name: Some(String::from("crealtivity")),
+            roll_weight: None,
+            roll_length: Some(330),
+            timestamp: Some(get_timestamp())
+        };
+
+        let ans = test_spool.get_length();
+        assert_eq!(ans, 330);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_spool_length_none() {
+        let mut test_spool = Spool {
+            roll_id: Some(Uuid::new_v4()),
+            roll_name: Some(String::from("crealtivity")),
+            roll_weight: None,
+            roll_length: None,
+            timestamp: Some(get_timestamp())
+        };
+
+        let _ans = test_spool.get_length();
+    }
+
+    #[test]
+    fn test_create_new_spool() {
+        let conn = Connection::open_in_memory().unwrap();
+        create_new_spool_tbl(&conn).unwrap();
+        let mut test_spool = Spool {
+            roll_id: Some(Uuid::new_v4()),
+            roll_name: Some(String::from("crealtivity")),
+            roll_weight: Some(1000),
+            roll_length: Some(330),
+            timestamp: Some(get_timestamp())
+        };
+       let rt = open_new_spool(&conn, &mut test_spool).unwrap();
+       assert_eq!(rt, 1);
+        let check_query = "SELECT * FROM spool";
+        let exists_rt = conn.query_row(check_query, [], |row| Ok(Spool {
+            roll_id: row.get(0)?,
+            roll_name: row.get(1)?,
+            roll_weight: row.get(2)?,
+            roll_length: row.get(3)?,
+            timestamp: row.get(4)?,
+        })).unwrap();
+
+        assert_eq!(exists_rt.roll_id.unwrap(), test_spool.roll_id.unwrap());
+        assert_eq!(exists_rt.roll_name.unwrap(), "crealtivity".to_string());
+        assert_eq!(exists_rt.roll_weight.unwrap(), 1000);
+        assert_eq!(exists_rt.roll_length.unwrap(), 330);
+        assert!(exists_rt.timestamp.unwrap() > 1734209754);
+
+    }
+
 }
