@@ -11,6 +11,7 @@ struct Spool {
     timestamp: Option<i64>,
 }
 
+#[derive(Debug)]
 struct Filament {
     print_id: Option<Uuid>,
     print_weight: Option<f32>,
@@ -18,6 +19,9 @@ struct Filament {
     print_time: Option<i32>,
     roll_id: Option<Uuid>,
 }
+
+#[derive(Debug)]
+struct Remaining(f32, f32);
 
 impl Spool {
     fn get_weight(&mut self) -> i32 {
@@ -83,8 +87,7 @@ fn main() {
     let db_path = "./3d_print.db";
     let db = Connection::open(db_path).unwrap();
     println!("Connection to database has been established");
-    create_new_spool_tbl(&db).unwrap();
-
+    
     //println!("Remainder 3D Printing");
     //println!("Create New Real");
     //println!("Add Print");
@@ -94,8 +97,61 @@ fn main() {
     rt.unwrap();
 }
 
-fn check_remaining() -> u32 {
-    return 0;
+
+fn check_remaining(
+    conn: &Connection
+) -> (f32, f32) {
+    //Get Spool currently used
+    let current_spool = get_current_spool(conn).unwrap();
+
+    //Get the sum of weight and length for current spool.
+    //Get information for spool.
+    //Minus sum from original for remaining
+    let accu_query = 
+    "SELECT SUM(print_weight), SUM(print_length) FROM filament WHERE roll_id = ?1";
+    let accu_rt = conn.query_row(accu_query, [current_spool.roll_id], |row| {
+        Ok(Filament {
+            print_id: None,
+            print_weight: row.get(0)?,
+            print_length: row.get(1)?,
+            print_time: None,
+            roll_id: None
+        })
+    }).unwrap();
+    let original_query = 
+    "SELECT roll_weight, roll_length FROM spool WHERE roll_id = ?1";
+    let original_rt = conn.query_row(original_query, [current_spool.roll_id], |row| {
+        Ok(Spool {
+            roll_id: None,
+            roll_name: None,
+            roll_weight: row.get(0)?,
+            roll_length: row.get(1)?,
+            timestamp: None
+        })
+    }).unwrap();
+
+    let remaining_length = (original_rt.roll_length.unwrap() as f32) - accu_rt.print_length.unwrap();
+    let remaining_weight = (original_rt.roll_weight.unwrap() as f32) - accu_rt.print_weight.unwrap();
+    let remaining_rt = (remaining_weight, remaining_length);
+    remaining_rt
+}
+
+struct RollId {
+    roll_id: Uuid,
+}
+
+fn get_current_spool(
+    conn: &Connection
+) -> Result<RollId> {
+    let check_query =
+        "SELECT r.roll_id FROM spool r WHERE r.roll_timestamp = (SELECT MAX(roll_timestamp) FROM spool)";
+
+    let exists_rt = conn.query_row(check_query, [], |row| {
+        Ok(RollId {
+            roll_id: row.get(0).unwrap(),
+        })
+    });
+    exists_rt
 }
 
 fn add_new_print(
@@ -103,17 +159,7 @@ fn add_new_print(
     print: &mut Filament
 ) -> Result<usize> {
     //Get Spool currently used
-    let check_query =
-        "SELECT r.roll_id FROM spool r WHERE r.roll_timestamp = (SELECT MAX(roll_timestamp) FROM spool)";
-
-    struct RollId {
-        roll_id: Uuid,
-    }
-    let exists_rt = conn.query_row(check_query, [], |row| {
-        Ok(RollId {
-            roll_id: row.get(0).unwrap(),
-        })
-    }).unwrap();
+    let exists_rt = get_current_spool(conn).unwrap();
     print.roll_id = Some(exists_rt.roll_id);
 
     //Add print to list
@@ -445,5 +491,50 @@ mod tests {
         assert_eq!(exists_rt2.print_length.unwrap(), 2.31);
         assert_eq!(exists_rt2.print_time.unwrap(), 1125);
         assert_eq!(exists_rt2.roll_id.unwrap(), second_test_spool.roll_id.unwrap());
+    }
+
+    #[test]
+    fn test_create_remaining() {
+        //Create in memory DB
+        let conn = Connection::open_in_memory().unwrap();
+        
+        //Create test spool
+        create_new_spool_tbl(&conn).unwrap();
+        create_new_filament_tbl(&conn).unwrap();
+
+        let mut test_spool = Spool {
+            roll_id: Some(Uuid::new_v4()),
+            roll_name: Some(String::from("crealtivity")),
+            roll_weight: Some(1000),
+            roll_length: Some(330),
+            timestamp: Some(get_timestamp()),
+        };
+        let rt = open_new_spool(&conn, &mut test_spool).unwrap();
+        assert_eq!(rt, 1);
+        //Test print creation
+        let mut test_print = Filament {
+            print_id: Some(Uuid::new_v4()),
+            print_weight: None,
+            print_length: Some(2.31),
+            print_time: Some(1125),
+            roll_id: None
+        };
+
+        let mut second_test_print = Filament {
+            print_id: Some(Uuid::new_v4()),
+            print_weight: Some(89.6),
+            print_length: None,
+            print_time: Some(2700),
+            roll_id: None
+        };
+        let _rt2 = add_new_print(&conn, &mut test_print).unwrap();
+        let ans = check_remaining(&conn);
+        assert_eq!(ans.0, 993.0);
+        assert_eq!(ans.1, 327.69);
+
+        let _rt3 = add_new_print(&conn, &mut second_test_print).unwrap();
+        let ans = check_remaining(&conn);
+        assert_eq!(ans.0, 903.4);
+        assert_eq!(ans.1, 298.122);
     }
 }
