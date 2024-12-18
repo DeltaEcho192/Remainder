@@ -9,4 +9,4 @@ your 3d printer.
 - [ ] Split files up into more managable peices
 - [ ] Add a few more tests
 - [ ] Add functionallity to import a list of prints.
-
+- [ ] Be able to correctly install files on a system

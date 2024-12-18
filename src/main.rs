@@ -1,7 +1,7 @@
+use clap::{Parser, Subcommand};
 use rusqlite::{Connection, Result};
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
-use clap::{Parser, Subcommand};
 
 /// CLI to keep track and know levels of a 3D printers filament levels
 #[derive(Parser, Debug)]
@@ -13,7 +13,7 @@ struct Args {
     /// The weight of the spool or the print.
     #[arg(short, long)]
     weight: Option<f32>,
-    
+
     /// The lenght of the spool or the print.
     #[arg(short, long)]
     length: Option<f32>,
@@ -27,8 +27,9 @@ enum Commands {
     },
     AddPrint {
         print_time: i32,
-    }, 
-    CheckRemaing,
+    },
+    CheckRemaining,
+    LifetimeStats,
 }
 
 #[derive(Debug)]
@@ -119,9 +120,9 @@ fn main() {
     create_new_spool_tbl(&db).unwrap();
     create_new_filament_tbl(&db).unwrap();
     let args = Args::parse();
-  
+
     match args.cmd {
-        Commands::AddPrint{print_time} => {
+        Commands::AddPrint { print_time } => {
             println!("Adding New Print: Print Time {}", print_time);
             let mut new_print = Filament {
                 print_id: Some(Uuid::new_v4()),
@@ -135,8 +136,8 @@ fn main() {
             if print_rt != 1 {
                 panic!("Didnt Successfully Create Print");
             }
-        },
-        Commands::CreateSpool{spool_name} => {
+        }
+        Commands::CreateSpool { spool_name } => {
             println!("Creating New spool: {}", spool_name);
             let mut new_spool = Spool {
                 roll_id: Some(Uuid::new_v4()),
@@ -149,18 +150,49 @@ fn main() {
             if spool_rt != 1 {
                 panic!("Didnt Successfully Create Spool");
             }
-
-        },
-        Commands::CheckRemaing => {
+        }
+        Commands::CheckRemaining => {
             println!("Checking Remaining levels of Printer");
             let (weight, length) = check_remaining(&db);
             println!("Estimated REMAINING Weight: {} gram", weight);
             println!("Estimated REMAINING Lenght: {} meters", length);
-        },
+        }
+        Commands::LifetimeStats => {
+            println!("Lifetime Stats for printer:");
+            let (total_weight, total_length, total_time) = lifetime_statistics(&db);
+            println!("Total Amount of Fillament used: {} grams", total_weight);
+            println!("Total Length of Fillament used: {} meters", total_length);
+            let time_converted = total_time/60 as i32;
+            println!("Total Printing Time: {} min", time_converted);
+
+        }
     }
 
     let rt = db.close();
     rt.unwrap();
+}
+
+fn lifetime_statistics(conn: &Connection) -> (f32, f32, i32) {
+    let lifetime_query =
+        "SELECT SUM(print_weight), SUM(print_length), SUM(print_time) FROM filament";
+
+    let lifetime_rt = conn
+        .query_row(lifetime_query, [], |row| {
+            Ok(Filament {
+                print_id: None,
+                print_weight: row.get(0)?,
+                print_length: row.get(1)?,
+                print_time: row.get(2)?,
+                roll_id: None,
+            })
+        })
+        .unwrap();
+    let lifetime_output = (
+        lifetime_rt.print_weight.unwrap(),
+        lifetime_rt.print_length.unwrap(),
+        lifetime_rt.print_time.unwrap(),
+    );
+    lifetime_output
 }
 
 fn check_remaining(conn: &Connection) -> (f32, f32) {
@@ -195,10 +227,8 @@ fn check_remaining(conn: &Connection) -> (f32, f32) {
         })
         .unwrap();
 
-    let remaining_length =
-        original_rt.roll_length.unwrap() - accu_rt.print_length.unwrap();
-    let remaining_weight =
-        original_rt.roll_weight.unwrap() - accu_rt.print_weight.unwrap();
+    let remaining_length = original_rt.roll_length.unwrap() - accu_rt.print_length.unwrap();
+    let remaining_weight = original_rt.roll_weight.unwrap() - accu_rt.print_weight.unwrap();
     let remaining_rt = (remaining_weight, remaining_length);
     remaining_rt
 }
