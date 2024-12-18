@@ -1,6 +1,6 @@
-use rusqlite::Connection;
-use crate::print_structs::*;
 use crate::print_add::get_current_spool;
+use crate::print_structs::*;
+use rusqlite::Connection;
 
 pub fn lifetime_statistics(conn: &Connection) -> (f32, f32, i32) {
     let lifetime_query =
@@ -18,9 +18,9 @@ pub fn lifetime_statistics(conn: &Connection) -> (f32, f32, i32) {
         })
         .unwrap();
     let lifetime_output = (
-        lifetime_rt.print_weight.unwrap(),
-        lifetime_rt.print_length.unwrap(),
-        lifetime_rt.print_time.unwrap(),
+        lifetime_rt.print_weight.unwrap_or_default(),
+        lifetime_rt.print_length.unwrap_or_default(),
+        lifetime_rt.print_time.unwrap_or_default(),
     );
     lifetime_output
 }
@@ -57,8 +57,8 @@ pub fn check_remaining(conn: &Connection) -> (f32, f32) {
         })
         .unwrap();
 
-    let remaining_length = original_rt.roll_length.unwrap() - accu_rt.print_length.unwrap();
-    let remaining_weight = original_rt.roll_weight.unwrap() - accu_rt.print_weight.unwrap();
+    let remaining_length = original_rt.roll_length.unwrap() - accu_rt.print_length.unwrap_or_default();
+    let remaining_weight = original_rt.roll_weight.unwrap() - accu_rt.print_weight.unwrap_or_default();
     let remaining_rt = (remaining_weight, remaining_length);
     remaining_rt
 }

@@ -1,6 +1,6 @@
+use crate::print_structs::*;
 use rusqlite::{Connection, Result};
 use uuid::Uuid;
-use crate::print_structs::*;
 
 pub struct RollId {
     pub roll_id: Uuid,

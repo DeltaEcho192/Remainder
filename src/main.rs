@@ -1,11 +1,12 @@
 use clap::{Parser, Subcommand};
-use rusqlite::{Connection, Result};
+use rusqlite::Connection;
 use std::time::{SystemTime, UNIX_EPOCH};
+use std::env;
 use uuid::Uuid;
-mod tbl_creation;
 mod print_add;
 mod print_stats;
 mod print_structs;
+mod tbl_creation;
 use print_structs::*;
 
 /// CLI to keep track and know levels of a 3D printers filament levels
@@ -37,11 +38,20 @@ enum Commands {
     LifetimeStats,
 }
 
-
 fn main() {
-    let db_path = "./3d_print.db";
+    let db_path = match env::home_dir() {
+        Some(mut path) => {
+            //println!("Your home directory, probably: {}", path.display());
+            path.push(".remainder/3d_print_db.db");
+            path
+        }
+        None => {
+            println!("Impossible to get your home dir!");
+            panic!("Failed");
+        }
+    };
     let db = Connection::open(db_path).unwrap();
-    println!("Connection to database has been established");
+    //println!("Connection to database has been established");
     //Create test spool
     tbl_creation::create_new_spool_tbl(&db).unwrap();
     tbl_creation::create_new_filament_tbl(&db).unwrap();
@@ -88,9 +98,8 @@ fn main() {
             let (total_weight, total_length, total_time) = print_stats::lifetime_statistics(&db);
             println!("Total Amount of Fillament used: {} grams", total_weight);
             println!("Total Length of Fillament used: {} meters", total_length);
-            let time_converted = total_time/60 as i32;
+            let time_converted = total_time / 60 as i32;
             println!("Total Printing Time: {} min", time_converted);
-
         }
     }
 
@@ -410,5 +419,52 @@ mod tests {
         assert_eq!(ans.0, 96.59999);
         assert_eq!(ans.1, 31.878);
         assert_eq!(ans.2, 3825);
+    }
+
+    #[test]
+    fn test_check_lifetime_empty() {
+        //Create in memory DB
+        let conn = Connection::open_in_memory().unwrap();
+
+        //Create test spool
+        tbl_creation::create_new_spool_tbl(&conn).unwrap();
+        tbl_creation::create_new_filament_tbl(&conn).unwrap();
+
+        let mut test_spool = Spool {
+            roll_id: Some(Uuid::new_v4()),
+            roll_name: Some(String::from("crealtivity")),
+            roll_weight: Some(1000.0),
+            roll_length: Some(330.0),
+            timestamp: Some(get_timestamp()),
+        };
+        let rt = print_add::open_new_spool(&conn, &mut test_spool).unwrap();
+        assert_eq!(rt, 1);
+        let ans = print_stats::lifetime_statistics(&conn);
+        assert_eq!(ans.0, 0.0);
+        assert_eq!(ans.1, 0.0);
+        assert_eq!(ans.2, 0);
+    }
+
+    #[test]
+    fn test_check_remaining_empty() {
+        //Create in memory DB
+        let conn = Connection::open_in_memory().unwrap();
+
+        //Create test spool
+        tbl_creation::create_new_spool_tbl(&conn).unwrap();
+        tbl_creation::create_new_filament_tbl(&conn).unwrap();
+
+        let mut test_spool = Spool {
+            roll_id: Some(Uuid::new_v4()),
+            roll_name: Some(String::from("crealtivity")),
+            roll_weight: Some(1000.0),
+            roll_length: Some(330.0),
+            timestamp: Some(get_timestamp()),
+        };
+        let rt = print_add::open_new_spool(&conn, &mut test_spool).unwrap();
+        assert_eq!(rt, 1);
+        let ans = print_stats::check_remaining(&conn);
+        assert_eq!(ans.0, 1000.0);
+        assert_eq!(ans.1, 330.0);
     }
 }

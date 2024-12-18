@@ -18,9 +18,6 @@ pub struct Filament {
     pub roll_id: Option<Uuid>,
 }
 
-#[derive(Debug)]
-struct Remaining(f32, f32);
-
 impl Spool {
     pub fn get_weight(&mut self) -> f32 {
         const CONVERSION_FACTOR: f32 = 3.0303;

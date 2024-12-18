@@ -12,7 +12,7 @@ pub fn create_new_spool_tbl(conn: &Connection) -> Result<(), &'static str> {
     };
     match exists {
         0 => {
-            println!("No spool table found, need to create one");
+            //println!("No spool table found, need to create one");
             let create_query = "CREATE TABLE spool (
                 roll_id BLOB PRIMARY KEY,
                 roll_name TEXT,
@@ -20,13 +20,13 @@ pub fn create_new_spool_tbl(conn: &Connection) -> Result<(), &'static str> {
                 roll_length REAL,
                 roll_timestamp INTEGER NOT NULL)";
             conn.execute(create_query, ()).unwrap();
-            println!("Created Spool Table");
+            //println!("Created Spool Table");
         }
         1 => {
-            println!("Spool table found")
+            //println!("Spool table found")
         }
         _ => {
-            println!("Issue with finding table");
+            eprintln!("Issue with finding table");
             return Err("Invalid Amount of tables");
         }
     }
@@ -46,7 +46,7 @@ pub fn create_new_filament_tbl(conn: &Connection) -> Result<(), &'static str> {
     };
     match exists {
         0 => {
-            println!("No filament table found, need to create one");
+            //println!("No filament table found, need to create one");
             let create_query = "CREATE TABLE filament(
                 print_id BLOB PRIMARY KEY,
                 print_weight REAL,
@@ -54,10 +54,10 @@ pub fn create_new_filament_tbl(conn: &Connection) -> Result<(), &'static str> {
                 print_time INTEGER,
                 roll_id BLOB NOT NULL)";
             conn.execute(create_query, ()).unwrap();
-            println!("Created filament Table");
+            //println!("Created filament Table");
         }
         1 => {
-            println!("Filament table found")
+            //println!("Filament table found")
         }
         _ => {
             println!("Issue with finding table");
