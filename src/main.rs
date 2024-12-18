@@ -631,4 +631,46 @@ mod tests {
         assert_eq!(ans.0, 903.4);
         assert_eq!(ans.1, 298.122);
     }
+
+    #[test]
+    fn test_check_lifetime() {
+        //Create in memory DB
+        let conn = Connection::open_in_memory().unwrap();
+
+        //Create test spool
+        create_new_spool_tbl(&conn).unwrap();
+        create_new_filament_tbl(&conn).unwrap();
+
+        let mut test_spool = Spool {
+            roll_id: Some(Uuid::new_v4()),
+            roll_name: Some(String::from("crealtivity")),
+            roll_weight: Some(1000.0),
+            roll_length: Some(330.0),
+            timestamp: Some(get_timestamp()),
+        };
+        let rt = open_new_spool(&conn, &mut test_spool).unwrap();
+        assert_eq!(rt, 1);
+        //Test print creation
+        let mut test_print = Filament {
+            print_id: Some(Uuid::new_v4()),
+            print_weight: None,
+            print_length: Some(2.31),
+            print_time: Some(1125),
+            roll_id: None,
+        };
+
+        let mut second_test_print = Filament {
+            print_id: Some(Uuid::new_v4()),
+            print_weight: Some(89.6),
+            print_length: None,
+            print_time: Some(2700),
+            roll_id: None,
+        };
+        let _rt2 = add_new_print(&conn, &mut test_print).unwrap();
+        let _rt3 = add_new_print(&conn, &mut second_test_print).unwrap();
+        let ans = lifetime_statistics(&conn);
+        assert_eq!(ans.0, 96.59999);
+        assert_eq!(ans.1, 31.878);
+        assert_eq!(ans.2, 3825);
+    }
 }
